@@ -1,0 +1,2 @@
+artifacts/label-verifier/target/debug/deps/label_verifier-bfb5c786ec2f1f27 filter=lfs diff=lfs merge=lfs -text
+artifacts/label-verifier/target/debug/label-verifier filter=lfs diff=lfs merge=lfs -text

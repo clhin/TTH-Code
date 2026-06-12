@@ -1,0 +1,22 @@
+kind = "web"
+previewPath = "/"
+title = "TTB Label Verifier"
+version = "1.0.0"
+
+[[services]]
+localPort = 3000
+name = "Label Verifier"
+paths = ["/"]
+
+[services.development]
+run = "cd /home/runner/workspace/artifacts/label-verifier && PORT=3000 cargo run"
+
+[services.production.build]
+args = ["/bin/sh", "-c", "cd /home/runner/workspace/artifacts/label-verifier && cargo build --release"]
+
+[services.production.run]
+args = ["/home/runner/workspace/artifacts/label-verifier/target/release/label-verifier"]
+
+[services.production.run.env]
+PORT = "3000"
+STATIC_DIR = "/home/runner/workspace/artifacts/label-verifier/static"

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TTB Label Verification Tool</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Smooth loading indicator */
+    #loading { display: none; }
+    .htmx-request #loading { display: flex; }
+    .htmx-request #results-placeholder { display: none; }
+
+    /* Drag-and-drop highlight */
+    .drag-over { border-color: #2563EB !important; background-color: #EFF6FF !important; }
+
+    /* File preview */
+    #preview-img { max-height: 260px; object-fit: contain; }
+    #batch-file-list li { font-size: 0.8rem; padding: 2px 0; color: #374151; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans text-gray-800">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="bg-blue-800 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <svg class="w-7 h-7 text-blue-200" fill="none" stroke="currentColor" stroke-width="1.8"
+             viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+             d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0
+                3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946
+                3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138
+                3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806
+                3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438
+                3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+        <div>
+          <h1 class="text-xl font-bold leading-tight">TTB Label Verification Tool</h1>
+          <p class="text-blue-300 text-xs">Alcohol Beverage Label Compliance Review · AI-Powered OCR</p>
+        </div>
+      </div>
+
+      <!-- Mode toggle -->
+      <div class="flex bg-blue-900 rounded-lg p-1 gap-1 text-sm" id="mode-toggle">
+        <button onclick="setMode('single')" id="btn-single"
+                class="px-4 py-1.5 rounded-md font-medium transition-all bg-white text-blue-800 shadow-sm">
+          Single Label
+        </button>
+        <button onclick="setMode('batch')" id="btn-batch"
+                class="px-4 py-1.5 rounded-md font-medium transition-all text-blue-200 hover:text-white">
+          Batch Upload
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main layout ────────────────────────────────────────────────────── -->
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex flex-col lg:flex-row gap-6">
+
+      <!-- ── LEFT PANEL: Form ────────────────────────────────────────────── -->
+      <div class="lg:w-[420px] shrink-0 space-y-5">
+
+        <!-- ─── Single label form ─────────────────────────────────────── -->
+        <div id="single-panel">
+          <form
+            id="single-form"
+            hx-post="/verify"
+            hx-target="#results-panel"
+            hx-indicator="#loading"
+            hx-encoding="multipart/form-data"
+            class="space-y-5"
+          >
+            <!-- Image upload -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <h2 class="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">
+                Label Image
+              </h2>
+
+              <!-- Drop zone (shown before image is selected) -->
+              <label id="drop-zone"
+                     class="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                     for="image-input">
+                <div class="flex flex-col items-center gap-2 text-gray-400">
+                  <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="1.5"
+                       viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+                       d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                  <span class="text-sm font-medium">Drop image here or <span class="text-blue-600">browse</span></span>
+                  <span class="text-xs">JPG, PNG, WebP, TIFF</span>
+                </div>
+              </label>
+
+              <!-- Image preview card (shown after image is selected) -->
+              <div id="preview-card" class="hidden border border-gray-200 rounded-lg bg-gray-50 p-3">
+                <div class="flex items-start justify-between gap-2 mb-2">
+                  <span id="image-name" class="text-xs text-gray-600 font-medium truncate"></span>
+                  <button type="button" onclick="removeImage()"
+                          class="shrink-0 text-gray-400 hover:text-red-500 transition-colors text-sm leading-none"
+                          title="Remove image">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                         viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+                         d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <img id="preview-img" class="w-full max-w-full rounded-lg max-h-[260px] object-contain" alt="Label preview" />
+              </div>
+
+              <input id="image-input" name="image" type="file"
+                     accept="image/*" class="hidden" required onchange="previewImage(this)" />
+            </div>
+
+            <!-- Application data -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <h2 class="font-semibold text-gray-700 mb-4 text-sm uppercase tracking-wide">
+                Application Data
+              </h2>
+              <p class="text-xs text-gray-400 mb-4">
+                Enter only the fields present on your COLA application. Leave blank fields empty.
+              </p>
+
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Brand Name</label>
+                  <input name="brand_name" type="text" placeholder="e.g. OLD TOM DISTILLERY"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Class / Type</label>
+                  <input name="class_type" type="text" placeholder="e.g. Kentucky Straight Bourbon Whiskey"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Alcohol Content</label>
+                    <input name="abv" type="text" placeholder="e.g. 45%"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Net Contents</label>
+                    <input name="net_contents" type="text" placeholder="e.g. 750 mL"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Producer / Bottler Name</label>
+                  <input name="producer_name" type="text" placeholder="e.g. Old Tom Distillery, Louisville, KY"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Country of Origin</label>
+                  <input name="country_of_origin" type="text" placeholder="e.g. Product of USA"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                </div>
+
+                <!-- Government warning toggle -->
+                <label class="flex items-center gap-3 cursor-pointer group select-none">
+                  <input name="check_government_warning" type="checkbox" value="on"
+                         class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+                  <span class="text-sm text-gray-700 group-hover:text-gray-900">
+                    Verify Government Warning Statement
+                  </span>
+                  <span class="text-xs text-gray-400">(27 CFR § 16.21)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit"
+                    class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-semibold py-3 rounded-xl shadow transition-colors text-base">
+              Verify Label
+            </button>
+          </form>
+        </div>
+
+        <!-- ─── Batch panel ────────────────────────────────────────────── -->
+        <div id="batch-panel" class="hidden">
+          <form
+            id="batch-form"
+            hx-post="/verify/batch"
+            hx-target="#results-panel"
+            hx-indicator="#loading"
+            hx-encoding="multipart/form-data"
+            class="space-y-5"
+          >
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <h2 class="font-semibold text-gray-700 mb-3 text-sm uppercase tracking-wide">
+                Batch Image Upload
+              </h2>
+              <p class="text-xs text-gray-400 mb-3">
+                Select multiple label images. All will be checked against the application data below.
+              </p>
+
+              <label id="batch-drop-zone"
+                     class="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                     for="batch-input">
+                <div class="flex flex-col items-center gap-2 text-gray-400">
+                  <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5"
+                       viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+                       d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                  <span class="text-sm font-medium">Select multiple images</span>
+                  <span class="text-xs">JPG, PNG, WebP, TIFF</span>
+                </div>
+                <input id="batch-input" name="images" type="file"
+                       accept="image/*" multiple class="hidden" required onchange="listBatchFiles(this)" />
+              </label>
+
+              <ul id="batch-file-list" class="mt-3 space-y-0.5 max-h-36 overflow-y-auto"></ul>
+              <p id="batch-count" class="text-xs text-blue-600 font-medium mt-2 hidden"></p>
+            </div>
+
+            <!-- Same application data section (shared) -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+              <h2 class="font-semibold text-gray-700 mb-4 text-sm uppercase tracking-wide">
+                Application Data <span class="text-gray-400 font-normal">(applied to all)</span>
+              </h2>
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Brand Name</label>
+                  <input name="brand_name" type="text" placeholder="e.g. OLD TOM DISTILLERY"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Class / Type</label>
+                  <input name="class_type" type="text"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ABV</label>
+                    <input name="abv" type="text" placeholder="45%"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Net Contents</label>
+                    <input name="net_contents" type="text" placeholder="750 mL"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Producer / Bottler</label>
+                  <input name="producer_name" type="text"
+                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                  <input name="check_government_warning" type="checkbox" value="on"
+                         class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <span class="text-sm text-gray-700">Verify Government Warning Statement</span>
+                </label>
+              </div>
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-semibold py-3 rounded-xl shadow transition-colors text-base">
+              Verify All Labels
+            </button>
+          </form>
+        </div>
+
+      </div>
+      <!-- ── end LEFT PANEL ─────────────────────────────────────────────── -->
+
+      <!-- ── RIGHT PANEL: Results ────────────────────────────────────────── -->
+      <div class="flex-1 min-w-0">
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm min-h-[480px] p-6">
+
+          <!-- Loading state -->
+          <div id="loading"
+               class="items-center justify-center gap-4 text-gray-500 py-20 flex-col">
+            <svg class="w-10 h-10 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            <div class="text-center">
+              <p class="font-medium text-gray-600">Processing label…</p>
+              <p class="text-sm text-gray-400 mt-1">Running OCR and checking fields</p>
+            </div>
+          </div>
+
+          <!-- Placeholder (shown before first submission) -->
+          <div id="results-placeholder" class="flex flex-col items-center justify-center h-full py-20 text-gray-400 gap-4">
+            <svg class="w-14 h-14 text-gray-200" fill="none" stroke="currentColor" stroke-width="1.2"
+                 viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2
+                    M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2
+                    m-6 9l2 2 4-4"/></svg>
+            <div class="text-center">
+              <p class="text-lg font-medium text-gray-400">No results yet</p>
+              <p class="text-sm text-gray-300 mt-1">Upload a label and fill in the application data, then click Verify.</p>
+            </div>
+          </div>
+
+          <!-- Results injected here by HTMX -->
+          <div id="results-panel"></div>
+
+        </div>
+
+        <!-- Reference card -->
+        <details class="mt-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <summary class="px-5 py-3 cursor-pointer font-semibold text-sm text-gray-600 hover:text-gray-800 select-none list-none flex items-center justify-between">
+            <span>TTB Government Warning Reference Text</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2"
+                 viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-5 pb-4 pt-2 border-t border-gray-100">
+            <p class="text-xs text-gray-500 mb-2">Per 27 CFR § 16.21 — exact wording required:</p>
+            <blockquote class="text-xs text-gray-700 bg-gray-50 border-l-4 border-blue-300 pl-3 pr-3 py-2 rounded-r leading-relaxed font-mono">
+              <strong>GOVERNMENT WARNING:</strong> (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
+            </blockquote>
+            <p class="text-xs text-amber-600 mt-2">⚠ "GOVERNMENT WARNING:" must appear in ALL CAPS and bold on the label.</p>
+          </div>
+        </details>
+      </div>
+      <!-- ── end RIGHT PANEL ────────────────────────────────────────────── -->
+
+    </div>
+  </main>
+
+  <script>
+    // ── Mode switching ──────────────────────────────────────────────────────
+    function setMode(mode) {
+      const isSingle = mode === 'single';
+      document.getElementById('single-panel').classList.toggle('hidden', !isSingle);
+      document.getElementById('batch-panel').classList.toggle('hidden', isSingle);
+
+      document.getElementById('btn-single').className =
+        isSingle
+          ? 'px-4 py-1.5 rounded-md font-medium transition-all bg-white text-blue-800 shadow-sm'
+          : 'px-4 py-1.5 rounded-md font-medium transition-all text-blue-200 hover:text-white';
+      document.getElementById('btn-batch').className =
+        !isSingle
+          ? 'px-4 py-1.5 rounded-md font-medium transition-all bg-white text-blue-800 shadow-sm'
+          : 'px-4 py-1.5 rounded-md font-medium transition-all text-blue-200 hover:text-white';
+
+      clearResults();
+    }
+
+    // ── Single label preview ─────────────────────────────────────────────
+    function previewImage(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const img = document.getElementById('preview-img');
+      const nameEl = document.getElementById('image-name');
+      const dropZone = document.getElementById('drop-zone');
+      const previewCard = document.getElementById('preview-card');
+
+      img.src = URL.createObjectURL(file);
+      img.onload = () => URL.revokeObjectURL(img.src);
+
+      nameEl.textContent = file.name;
+      dropZone.classList.add('hidden');
+      previewCard.classList.remove('hidden');
+    }
+
+    function removeImage() {
+      const input = document.getElementById('image-input');
+      const img = document.getElementById('preview-img');
+      const dropZone = document.getElementById('drop-zone');
+      const previewCard = document.getElementById('preview-card');
+
+      input.value = '';
+      img.src = '';
+      dropZone.classList.remove('hidden');
+      previewCard.classList.add('hidden');
+    }
+
+    // ── Batch file list ──────────────────────────────────────────────────
+    function listBatchFiles(input) {
+      const files = Array.from(input.files);
+      const list = document.getElementById('batch-file-list');
+      const count = document.getElementById('batch-count');
+
+      list.innerHTML = files.slice(0, 20).map((f, i) =>
+        `<li class="flex items-center gap-1.5 text-gray-600">
+           <svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2"
+                viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+           ${f.name}
+         </li>`
+      ).join('');
+
+      if (files.length > 20) {
+        list.innerHTML += `<li class="text-gray-400">…and ${files.length - 20} more</li>`;
+      }
+
+      count.textContent = `${files.length} file${files.length !== 1 ? 's' : ''} selected`;
+      count.classList.remove('hidden');
+    }
+
+    // ── Drag-and-drop ────────────────────────────────────────────────────
+    function setupDrop(zoneId, inputId) {
+      const zone = document.getElementById(zoneId);
+      if (!zone) return;
+      ['dragenter', 'dragover'].forEach(ev =>
+        zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('drag-over'); }));
+      ['dragleave', 'drop'].forEach(ev =>
+        zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('drag-over'); }));
+      zone.addEventListener('drop', e => {
+        const input = document.getElementById(inputId);
+        // DataTransfer trick to assign dropped files to the file input
+        const dt = e.dataTransfer;
+        if (dt.files.length) {
+          // Create a new FileList-like approach: trigger change
+          const file = dt.files[0];
+          // Use a DataTransfer object
+          const dtsync = new DataTransfer();
+          Array.from(dt.files).forEach(f => dtsync.items.add(f));
+          input.files = dtsync.files;
+          input.dispatchEvent(new Event('change'));
+        }
+      });
+    }
+
+    setupDrop('drop-zone', 'image-input');
+    setupDrop('batch-drop-zone', 'batch-input');
+
+    // ── Clear results when new form is touched ────────────────────────────
+    function clearResults() {
+      document.getElementById('results-panel').innerHTML = '';
+      document.getElementById('results-placeholder').style.display = '';
+    }
+
+    // ── Hide placeholder once results arrive ─────────────────────────────
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+      if (e.detail.target.id === 'results-panel') {
+        document.getElementById('results-placeholder').style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>

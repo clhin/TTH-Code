@@ -1,0 +1,2 @@
+- [Rust Actix Web in pnpm workspace](rust-actix-setup.md) — Rust artifacts can't use createArtifact; run as webview workflow on a supported port instead.
+- [actix-multipart v0.7 API quirks](rust-actix-setup.md) — field.name() and content_disposition() both return Option, not bare references.
